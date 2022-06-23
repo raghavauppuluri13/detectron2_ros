@@ -41,8 +41,6 @@ class Detectron2node(object):
 
         self._visualization = self.load_param("~visualization", True)
         self.camera_ns = list(rospy.get_param('~camera_ns'))
-        print(self.camera_ns)
-        #self.camera_ns = ['d405']
         self._result_pubs = [rospy.Publisher(f'/{cam}/detection/result', Result, queue_size=1) for cam in self.camera_ns]
         self._vis_pubs = [rospy.Publisher(f'/{cam}/detection/vis', Image, queue_size=1) for cam in self.camera_ns]
 
