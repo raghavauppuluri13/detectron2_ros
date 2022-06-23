@@ -1,14 +1,14 @@
 <launch>
-  <arg name="input" default="/d405/camera/color/image_raw" />
   <arg name="detection_threshold" default="0.8" />
-  <arg name="config" default="$(find detectron2_ros)/config/peg_config.yaml" />
-  <arg name="model" default="$(find detectron2_ros)/config/peg_model.pth" />
+  <arg name="config"/>
+  <arg name="model"/>
   <arg name="visualization" default="true" />
+  <arg name="detection_camera_ns" default="[d405,d455_0,d455_1]"/>
 
-  <node name="detectron2_ros"  pkg="detectron2_ros" type="detectron2_ros" output="screen" >
-    <param name="input" value="$(arg input)" />
+  <node name="detectron2_ros"  pkg="detectron2_ros" type="detectron2_ros" output="screen">
     <param name="detection_threshold" value="$(arg detection_threshold)" />
     <param name="config" value="$(arg config)" />
+    <rosparam param="camera_ns" subst_value="True">$(arg detection_camera_ns)</rosparam> 
     <param name="model" value="$(arg model)" />
     <param name="visualization" value="$(arg visualization)" />
   </node>

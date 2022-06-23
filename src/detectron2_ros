@@ -16,6 +16,7 @@ from detectron2.utils.logger import setup_logger
 from detectron2.utils.visualizer import Visualizer
 from detectron2_ros.msg import Result
 from sensor_msgs.msg import Image, RegionOfInterest
+from message_filters import Subscriber, ApproximateTimeSynchronizer
 
 
 class Detectron2node(object):
@@ -24,7 +25,7 @@ class Detectron2node(object):
         setup_logger()
 
         self._bridge = CvBridge()
-        self._last_msg = None
+        self._last_msgs = None
         self._msg_lock = threading.Lock()
         self._image_counter = 0
 
@@ -34,16 +35,21 @@ class Detectron2node(object):
             "~detection_threshold"
         )  # set threshold for this model
         self.cfg.MODEL.WEIGHTS = self.load_param("~model")
-        self._class_names = ['no_peg', 'peg'] 
+        self._class_names = ["n/a", "connector_male", "connector_female"]
 
         self.predictor = DefaultPredictor(self.cfg)
 
         self._visualization = self.load_param("~visualization", True)
-        self._result_pub = rospy.Publisher("~result", Result, queue_size=1)
-        self._vis_pub = rospy.Publisher("~visualization", Image, queue_size=1)
-        self._sub = rospy.Subscriber(
-            self.load_param("~input"), Image, self.callback_image, queue_size=1
-        )
+        self.camera_ns = list(rospy.get_param('~camera_ns'))
+        print(self.camera_ns)
+        #self.camera_ns = ['d405']
+        self._result_pubs = [rospy.Publisher(f'/{cam}/detection/result', Result, queue_size=1) for cam in self.camera_ns]
+        self._vis_pubs = [rospy.Publisher(f'/{cam}/detection/vis', Image, queue_size=1) for cam in self.camera_ns]
+
+        color_topic = str(rospy.get_param("/color_topic",'color/image_raw'))
+        self._subs = [Subscriber(f'/{cam}/camera/{color_topic}', Image) for cam in self.camera_ns]
+        self._ats = ApproximateTimeSynchronizer(self._subs, queue_size=10, slop=0.1)
+        self._ats.registerCallback(self.imgs_cb)
         self.start_time = time.time()
         rospy.logwarn("Initialized")
 
@@ -51,14 +57,14 @@ class Detectron2node(object):
         rate = rospy.Rate(100)
         while not rospy.is_shutdown():
             if self._msg_lock.acquire(False):
-                img_msg = self._last_msg
-                self._last_msg = None
+                img_msgs = self._last_msgs
+                self._last_msgs = None
                 self._msg_lock.release()
             else:
                 rate.sleep()
                 continue
 
-            if img_msg is not None:
+            if img_msgs is not None:
                 self._image_counter = self._image_counter + 1
                 if (self._image_counter % 11) == 10:
                     rospy.loginfo(
@@ -66,30 +72,31 @@ class Detectron2node(object):
                         float(self._image_counter) / (time.time() - self.start_time),
                     )
 
-                np_image = self.convert_to_cv_image(img_msg)
+                for i in range(len(self.camera_ns)):
+                    np_image = self.convert_to_cv_image(img_msgs[i])
 
-                outputs = self.predictor(np_image)
-                result = outputs["instances"].to("cpu")
-                result_msg = self.getResult(result)
+                    outputs = self.predictor(np_image)
+                    result = outputs["instances"].to("cpu")
+                    result_msg = self.getResult(result,self._headers[i])
 
-                self._result_pub.publish(result_msg)
+                    self._result_pubs[i].publish(result_msg)
 
-                # Visualize results
-                if self._visualization:
-                    v = Visualizer(
-                        np_image[:, :, ::-1],
-                        MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]),
-                        scale=1.2,
-                    )
-                    v = v.draw_instance_predictions(outputs["instances"].to("cpu"))
-                    img = v.get_image()[:, :, ::-1]
+                    # Visualize results
+                    if self._visualization:
+                        v = Visualizer(
+                            np_image[:, :, ::-1],
+                            MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]),
+                            scale=1.2,
+                        )
+                        v = v.draw_instance_predictions(outputs["instances"].to("cpu"))
+                        img = v.get_image()[:, :, ::-1]
 
-                    image_msg = self._bridge.cv2_to_imgmsg(img,encoding='rgb8')
-                    self._vis_pub.publish(image_msg)
+                        image_msg = self._bridge.cv2_to_imgmsg(img, encoding="rgb8")
+                        self._vis_pubs[i].publish(image_msg)
 
             rate.sleep()
 
-    def getResult(self, predictions):
+    def getResult(self, predictions, header):
 
         boxes = predictions.pred_boxes if predictions.has("pred_boxes") else None
 
@@ -99,7 +106,7 @@ class Detectron2node(object):
             return
 
         result_msg = Result()
-        result_msg.header = self._header
+        result_msg.header = header
         result_msg.class_ids = (
             predictions.pred_classes if predictions.has("pred_classes") else None
         )
@@ -154,11 +161,11 @@ class Detectron2node(object):
 
         return cv_img
 
-    def callback_image(self, msg):
-        rospy.logdebug("Get an image")
+    def imgs_cb(self, *img_msgs):
+        rospy.logdebug("Get images")
         if self._msg_lock.acquire(False):
-            self._last_msg = msg
-            self._header = msg.header
+            self._last_msgs = [msg for msg in img_msgs]
+            self._headers = [msg.header for msg in img_msgs]
             self._msg_lock.release()
 
     @staticmethod
