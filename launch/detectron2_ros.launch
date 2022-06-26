@@ -4,11 +4,13 @@
   <arg name="model"/>
   <arg name="visualization" default="true" />
   <arg name="detection_camera_ns" default="[d405,d455_0,d455_1]"/>
+  <arg name="class_names" default="[d405,d455_0,d455_1]"/>
 
   <node name="detectron2_ros"  pkg="detectron2_ros" type="detectron2_ros" output="screen">
     <param name="detection_threshold" value="$(arg detection_threshold)" />
     <param name="config" value="$(arg config)" />
     <rosparam param="camera_ns" subst_value="True">$(arg detection_camera_ns)</rosparam> 
+    <rosparam param="class_names" subst_value="True">$(arg class_names)</rosparam> 
     <param name="model" value="$(arg model)" />
     <param name="visualization" value="$(arg visualization)" />
   </node>
