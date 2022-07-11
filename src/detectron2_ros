@@ -42,11 +42,11 @@ class Detectron2node(object):
 
         self._visualization = self.load_param("~visualization", True)
         self.camera_ns = list(rospy.get_param('~camera_ns'))
-        self._result_pubs = [rospy.Publisher(f'/{cam}/detection/result', Result, queue_size=1) for cam in self.camera_ns]
-        self._vis_pubs = [rospy.Publisher(f'/{cam}/detection/vis', Image, queue_size=1) for cam in self.camera_ns]
+        self._result_pubs = [rospy.Publisher(f'{cam}/detection/result', Result, queue_size=1) for cam in self.camera_ns]
+        self._vis_pubs = [rospy.Publisher(f'{cam}/detection/vis', Image, queue_size=1) for cam in self.camera_ns]
 
-        color_topic = str(rospy.get_param("/color_topic",'color/image_raw'))
-        self._subs = [Subscriber(f'/{cam}/camera/{color_topic}', Image) for cam in self.camera_ns]
+        color_topic = str(rospy.get_param("color_topic",'color/image_raw'))
+        self._subs = [Subscriber(f'{cam}/camera/{color_topic}', Image) for cam in self.camera_ns]
         self._ats = ApproximateTimeSynchronizer(self._subs, queue_size=10, slop=0.1)
         self._ats.registerCallback(self.imgs_cb)
         self.start_time = time.time()
